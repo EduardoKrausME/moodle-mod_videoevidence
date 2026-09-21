@@ -1,0 +1,446 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * app.js
+ *
+ * @package   mod_videoevidence
+ * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+define(['core/ajax', 'core/notification'], function (Ajax, Notification) {
+    'use strict';
+
+    const parseTime = (value) => {
+        value = String(value || '').trim();
+        if (/^\d+(\.\d+)?$/.test(value)) {
+            return Number(value);
+        }
+        const parts = value.split(':').map(Number);
+        if (parts.some(Number.isNaN) || parts.length < 2 || parts.length > 3) {
+            return null;
+        }
+        if (parts.length === 2) {
+            return parts[1] < 60 ? parts[0] * 60 + parts[1] : null;
+        }
+        return parts[1] < 60 && parts[2] < 60 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : null;
+    };
+
+    const formatTime = (seconds) => {
+        seconds = Math.max(0, Math.round(Number(seconds) || 0));
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return h ? [h, m, s].map(v => String(v).padStart(2, '0')).join(':') :
+            [m, s].map(v => String(v).padStart(2, '0')).join(':');
+    };
+
+    const call = (methodname, args) => Ajax.call([{methodname, args}])[0];
+
+    class Html5Adapter {
+        constructor(element) {
+            this.player = element;
+        }
+
+        ready() {
+            return Promise.resolve(this);
+        }
+
+        current() {
+            return Number(this.player.currentTime || 0);
+        }
+
+        duration() {
+            return Number(this.player.duration || 0);
+        }
+
+        seek(t) {
+            this.player.currentTime = Math.max(0, Number(t));
+        }
+
+        play() {
+            return this.player.play();
+        }
+
+        pause() {
+            this.player.pause();
+        }
+
+        on(name, handler) {
+            this.player.addEventListener(name, handler);
+        }
+    }
+
+    let youtubePromise;
+    const youtubeApi = () => {
+        if (window.YT && window.YT.Player) {
+            return Promise.resolve(window.YT);
+        }
+        if (youtubePromise) {
+            return youtubePromise;
+        }
+        youtubePromise = new Promise((resolve, reject) => {
+            const previous = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+                if (typeof previous === 'function') {
+                    previous();
+                }
+                resolve(window.YT);
+            };
+            const script = document.createElement('script');
+            script.src = 'https://www.youtube.com/iframe_api';
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+        return youtubePromise;
+    };
+
+    class YoutubeAdapter {
+        constructor(element) {
+            this.element = element;
+            this.handlers = {};
+            this.last = 0;
+        }
+
+        ready() {
+            return youtubeApi().then(YT => new Promise(resolve => {
+                this.player = new YT.Player(this.element, {
+                    videoId: this.element.dataset.videoid,
+                    playerVars: {playsinline: 1, rel: 0},
+                    events: {
+                        onReady: () => {
+                            this.timer();
+                            resolve(this);
+                        },
+                        onStateChange: e => {
+                            if (e.data === YT.PlayerState.PLAYING) {
+                                this.emit('play');
+                            }
+                            if (e.data === YT.PlayerState.PAUSED) {
+                                this.emit('pause');
+                            }
+                            if (e.data === YT.PlayerState.ENDED) {
+                                this.emit('ended');
+                            }
+                        },
+                    },
+                });
+            }));
+        }
+
+        timer() {
+            window.setInterval(() => {
+                const cur = this.current();
+                if (Math.abs(cur - this.last) > 3) {
+                    this.emit('seeking');
+                }
+                this.emit('timeupdate');
+                this.last = cur;
+            }, 1000);
+        }
+
+        current() {
+            return Number(this.player.getCurrentTime() || 0);
+        }
+
+        duration() {
+            return Number(this.player.getDuration() || 0);
+        }
+
+        seek(t) {
+            this.player.seekTo(Math.max(0, Number(t)), true);
+        }
+
+        play() {
+            this.player.playVideo();
+            return Promise.resolve();
+        }
+
+        pause() {
+            this.player.pauseVideo();
+        }
+
+        on(name, handler) {
+            this.handlers[name] = (this.handlers[name] || []).concat(handler);
+        }
+
+        emit(name) {
+            (this.handlers[name] || []).forEach(fn => fn());
+        }
+    }
+
+    let vimeoPromise;
+    const vimeoApi = () => {
+        if (window.Vimeo && window.Vimeo.Player) {
+            return Promise.resolve(window.Vimeo);
+        }
+        if (!vimeoPromise) {
+            vimeoPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://player.vimeo.com/api/player.js';
+                script.onload = () => resolve(window.Vimeo);
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        return vimeoPromise;
+    };
+
+    class VimeoAdapter {
+        constructor(element) {
+            this.element = element;
+            this.cur = 0;
+            this.len = 0;
+            this.handlers = {};
+        }
+
+        ready() {
+            return vimeoApi().then(Vimeo => {
+                const opts = {id: Number(this.element.dataset.videoid), responsive: true};
+                if (this.element.dataset.hash) {
+                    opts.h = this.element.dataset.hash;
+                }
+                this.player = new Vimeo.Player(this.element, opts);
+                this.player.on('play', () => this.emit('play'));
+                this.player.on('pause', () => this.emit('pause'));
+                this.player.on('ended', () => this.emit('ended'));
+                this.player.on('seeked', data => {
+                    this.cur = data.seconds;
+                    this.emit('seeking');
+                });
+                this.player.on('timeupdate', data => {
+                    this.cur = data.seconds;
+                    this.len = data.duration;
+                    this.emit('timeupdate');
+                });
+                return Promise.all([this.player.ready(), this.player.getDuration()]).then(values => {
+                    this.len = values[1];
+                    return this;
+                });
+            });
+        }
+
+        current() {
+            return Number(this.cur || 0);
+        }
+
+        duration() {
+            return Number(this.len || 0);
+        }
+
+        seek(t) {
+            return this.player.setCurrentTime(Math.max(0, Number(t)));
+        }
+
+        play() {
+            return this.player.play();
+        }
+
+        pause() {
+            return this.player.pause();
+        }
+
+        on(name, handler) {
+            this.handlers[name] = (this.handlers[name] || []).concat(handler);
+        }
+
+        emit(name) {
+            (this.handlers[name] || []).forEach(fn => fn());
+        }
+    }
+
+    const createAdapter = root => {
+        const html5 = root.querySelector('[data-region="html5-player"]');
+        if (html5) {
+            return (new Html5Adapter(html5)).ready();
+        }
+        const youtube = root.querySelector('[data-region="youtube-player"]');
+        if (youtube) {
+            return (new YoutubeAdapter(youtube)).ready();
+        }
+        const vimeo = root.querySelector('[data-region="vimeo-player"]');
+        if (vimeo) {
+            return (new VimeoAdapter(vimeo)).ready();
+        }
+        return Promise.reject(new Error('No supported player was rendered.'));
+    };
+
+    const renderTimeline = (root, duration, segments) => {
+        const line = root.querySelector('[data-region="timeline"]');
+        if (!line || !duration) {
+            return;
+        }
+        line.innerHTML = '';
+        (segments || []).forEach(segment => {
+            const node = document.createElement('span');
+            node.className = 'watched';
+            node.style.left = `${Math.max(0, segment[0] * 100 / duration)}%`;
+            node.style.width = `${Math.max(0.2, (segment[1] - segment[0]) * 100 / duration)}%`;
+            line.appendChild(node);
+        });
+        root.querySelectorAll('[data-evidenceid]').forEach(item => {
+            const start = Number(item.dataset.start || 0);
+            const end = Number(item.dataset.end || start);
+            const node = document.createElement('span');
+            node.className = 'evidence-marker';
+            node.style.left = `${Math.max(0, start * 100 / duration)}%`;
+            node.style.width = `${Math.max(0.3, (end - start) * 100 / duration)}%`;
+            line.appendChild(node);
+        });
+    };
+
+    const init = () => {
+        const root = document.querySelector('[data-region="videoevidence-root"]');
+        if (!root) {
+            return;
+        }
+        const config = JSON.parse(root.dataset.config || '{}');
+        createAdapter(root).then(adapter => {
+            let playing = false;
+            let segmentStart = 0;
+            let lastSent = 0;
+            let sequence = Number(config.sequence || 0);
+            let segments = config.segments || [];
+
+            const sendProgress = (force = false) => {
+                const now = adapter.current();
+                const duration = adapter.duration();
+                if (!duration || (!force && now - lastSent < 5)) {
+                    return;
+                }
+                const end = now;
+                const start = playing ? Math.max(segmentStart, lastSent || segmentStart) : now;
+                sequence++;
+                call('mod_videoevidence_update_progress', {
+                    cmid: config.cmid, currentposition: now, duration,
+                    segmentstart: start, segmentend: end, sequence,
+                }).then(result => {
+                    lastSent = now;
+                    try {
+                        segments = JSON.parse(result.segments || '[]');
+                    } catch (e) {
+                        segments = [];
+                    }
+                    const percent = root.querySelector('[data-region="progress-percent"]');
+                    if (percent) {
+                        percent.textContent = Number(result.percent).toFixed(1);
+                    }
+                    renderTimeline(root, duration, segments);
+                }).catch(Notification.exception);
+            };
+
+            adapter.on('play', () => {
+                playing = true;
+                segmentStart = adapter.current();
+                lastSent = segmentStart;
+            });
+            adapter.on('pause', () => {
+                sendProgress(true);
+                playing = false;
+            });
+            adapter.on('ended', () => {
+                sendProgress(true);
+                playing = false;
+            });
+            adapter.on('seeking', () => {
+                const furthest = segments.reduce((max, segment) => Math.max(max, Number(segment[1] || 0)), 0);
+                if (!config.allowseek && adapter.current() > furthest + 2) {
+                    adapter.seek(furthest);
+                    segmentStart = furthest;
+                    lastSent = furthest;
+                    return;
+                }
+                sendProgress(true);
+                segmentStart = adapter.current();
+                lastSent = segmentStart;
+            });
+            adapter.on('timeupdate', () => sendProgress(false));
+
+            if (Number(config.lastposition || 0) > 2) {
+                if (Number(config.resumeplayback || 0) === 1) {
+                    adapter.seek(Number(config.lastposition));
+                } else if (Number(config.resumeplayback || 0) === 2 && window.confirm(config.resumequestion || 'Continue?')) {
+                    adapter.seek(Number(config.lastposition));
+                }
+            }
+            renderTimeline(root, adapter.duration(), segments);
+
+            root.addEventListener('click', event => {
+                const button = event.target.closest('[data-action]');
+                if (!button) {
+                    return;
+                }
+                const action = button.dataset.action;
+                const question = button.closest('[data-region="question"]');
+                const questionid = question ? Number(question.dataset.questionid) : 0;
+                if (action === 'capture-start' || action === 'capture-end') {
+                    const input = question.querySelector(action === 'capture-start' ? '[data-region="starttime"]' : '[data-region="endtime"]');
+                    if (input) {
+                        input.value = formatTime(adapter.current());
+                    }
+                    return;
+                }
+                if (action === 'play-evidence') {
+                    const item = button.closest('[data-evidenceid]');
+                    adapter.seek(Number(item.dataset.start || 0));
+                    adapter.play();
+                    return;
+                }
+                if (action === 'save-evidence') {
+                    const start = parseTime(question.querySelector('[data-region="starttime"]').value);
+                    const endInput = question.querySelector('[data-region="endtime"]');
+                    const end = endInput ? parseTime(endInput.value) : start;
+                    const justification = question.querySelector('[data-region="justification"]').value.trim();
+                    if (start === null || end === null || end < start || !justification) {
+                        Notification.alert('Video Evidence', 'Informe um tempo válido e a justificativa.');
+                        return;
+                    }
+                    button.disabled = true;
+                    call('mod_videoevidence_save_evidence', {
+                        cmid: config.cmid, questionid, evidenceid: 0, starttime: start, endtime: end, justification,
+                    }).then(() => window.location.reload()).catch(error => {
+                        button.disabled = false;
+                        Notification.exception(error);
+                    });
+                    return;
+                }
+                if (action === 'delete-evidence') {
+                    const item = button.closest('[data-evidenceid]');
+                    button.disabled = true;
+                    call('mod_videoevidence_delete_evidence', {
+                        cmid: config.cmid,
+                        evidenceid: Number(item.dataset.evidenceid)
+                    })
+                        .then(() => window.location.reload()).catch(error => {
+                        button.disabled = false;
+                        Notification.exception(error);
+                    });
+                    return;
+                }
+                if (action === 'submit-answer') {
+                    button.disabled = true;
+                    call('mod_videoevidence_submit_answer', {cmid: config.cmid, questionid})
+                        .then(() => window.location.reload()).catch(error => {
+                        button.disabled = false;
+                        Notification.exception(error);
+                    });
+                }
+            });
+        }).catch(Notification.exception);
+    };
+
+    return {init};
+});

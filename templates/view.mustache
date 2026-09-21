@@ -1,0 +1,123 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+@template mod_videoevidence/view
+}}
+<div class="videoevidence" data-region="videoevidence-root" data-config="{{configjson}}">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div><h2>{{name}}</h2>{{#hasintro}}
+            <div class="mb-3">{{{intro}}}</div>{{/hasintro}}</div>
+        <div class="videoevidence-actions">
+            {{#canmanage}}<a class="btn btn-secondary" href="{{{manageurl}}}">{{#str}}
+                managequestions, videoevidence{{/str}}</a>{{/canmanage}}
+            {{#canreport}}<a class="btn btn-secondary" href="{{{reporturl}}}">{{#str}}
+                report, videoevidence{{/str}}</a>{{/canreport}}
+        </div>
+    </div>
+
+    <div class="videoevidence-player card mb-3">
+        <div class="card-body">
+            {{#player.source}}
+                {{#player.url}}
+                    <video data-region="html5-player" controls preload="metadata" class="w-100"
+                           {{#player.poster}}poster="{{{player.poster}}}"{{/player.poster}}>
+                        <source src="{{{player.url}}}">
+                    </video>
+                {{/player.url}}
+            {{/player.source}}
+            {{#player.youtubeid}}
+                <div class="videoevidence-embed" data-region="youtube-player"
+                     data-videoid="{{player.youtubeid}}"></div>{{/player.youtubeid}}
+            {{#player.vimeoid}}
+                <div class="videoevidence-embed" data-region="vimeo-player" data-videoid="{{player.vimeoid}}"
+                     data-hash="{{player.vimeohash}}"></div>{{/player.vimeoid}}
+            <div class="mt-2"><strong>{{#str}}watchedpercent, videoevidence{{/str}}:</strong> <span
+                    data-region="progress-percent">{{progresspercent}}</span>%
+            </div>
+            <div class="videoevidence-timeline mt-2" data-region="timeline"
+                 aria-label="{{#str}}timeline, videoevidence{{/str}}"></div>
+        </div>
+    </div>
+
+    {{^hasquestions}}
+        <div class="alert alert-info">{{#str}}noquestions, videoevidence{{/str}}</div>{{/hasquestions}}
+    {{#questions}}
+        <section class="card mb-3" data-region="question" data-questionid="{{id}}"
+                 data-ismoment="{{#ismoment}}1{{/ismoment}}{{^ismoment}}0{{/ismoment}}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between"><h3 class="h5">{{#str}}
+                    questionnumber, videoevidence, {{number}}{{/str}}</h3><span
+                        class="badge bg-secondary">{{statuslabel}}</span></div>
+                <div class="mb-2">{{{questiontext}}}</div>
+                <div class="small text-muted mb-3">{{#str}}evidencerequirement, videoevidence, {"min":{{minevidence}}
+                    ,"max":{{maxevidence}}}{{/str}}{{#required}}
+                    · {{#str}}required, videoevidence{{/str}}{{/required}}</div>
+                <div data-region="evidence-list">
+                    {{#evidence}}
+                        <div class="videoevidence-evidence border rounded p-2 mb-2" data-evidenceid="{{id}}"
+                             data-start="{{startseconds}}" data-end="{{endseconds}}">
+                            <button type="button" class="btn btn-link p-0"
+                                    data-action="play-evidence">{{start}}{{^ismoment}} – {{end}}{{/ismoment}}</button>
+                            <div>{{justification}}</div>
+                            {{^locked}}
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+                                        data-action="delete-evidence">{{#str}}delete, core{{/str}}</button>{{/locked}}
+                        </div>
+                    {{/evidence}}
+                </div>
+                {{#canadd}}
+                    <div class="videoevidence-editor border rounded p-3 mt-3" data-region="evidence-editor">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-3"><label class="form-label">{{#str}}
+                                starttime, videoevidence{{/str}}</label><input type="text" class="form-control"
+                                                                               data-region="starttime"
+                                                                               placeholder="MM:SS"></div>
+                            {{^ismoment}}
+                                <div class="col-md-3"><label class="form-label">{{#str}}
+                                    endtime, videoevidence{{/str}}</label><input type="text" class="form-control"
+                                                                                 data-region="endtime"
+                                                                                 placeholder="MM:SS"></div>{{/ismoment}}
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-outline-secondary"
+                                        data-action="capture-start">{{#str}}
+                                    usecurrenttime, videoevidence{{/str}}</button>
+                            </div>
+                            {{^ismoment}}
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-secondary"
+                                            data-action="capture-end">{{#str}}
+                                        usecurrenttimeend, videoevidence{{/str}}</button>
+                                </div>{{/ismoment}}
+                        </div>
+                        <label class="form-label mt-2">{{#str}}justification, videoevidence{{/str}}</label>
+                        <textarea class="form-control" rows="3" data-region="justification"></textarea>
+                        <button type="button" class="btn btn-primary mt-2" data-action="save-evidence">{{#str}}
+                            addevidence, videoevidence{{/str}}</button>
+                    </div>
+                {{/canadd}}
+                {{^locked}}
+                    <button type="button" class="btn btn-success mt-3" data-action="submit-answer">{{#str}}
+                        submitanswer, videoevidence{{/str}}</button>{{/locked}}
+                {{#hasscore}}
+                    <div class="mt-2"><strong>{{#str}}score, videoevidence{{/str}}:</strong> {{score}}%
+                    </div>{{/hasscore}}
+                {{#hasfeedback}}
+                    <div class="alert alert-info mt-2">{{feedback}}</div>{{/hasfeedback}}
+            </div>
+        </section>
+    {{/questions}}
+</div>

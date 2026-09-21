@@ -1,0 +1,57 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_videoevidence/report
+
+    Example context (json):
+    {
+        Aqui tem que criar o context em inglês
+    }
+}}
+<div class="d-flex justify-content-between mb-3"><h2>{{#str}}report, videoevidence{{/str}} — {{name}}</h2><a
+        class="btn btn-secondary" href="{{{viewurl}}}">{{#str}}backtoactivity, videoevidence{{/str}}</a></div>
+{{^hasrows}}
+    <div class="alert alert-info">{{#str}}nostudents, videoevidence{{/str}}</div>{{/hasrows}}
+{{#hasrows}}
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th>{{#str}}student, videoevidence{{/str}}</th>
+                <th>{{#str}}questionsanswered, videoevidence{{/str}}</th>
+                <th>{{#str}}evidenceselected, videoevidence{{/str}}</th>
+                <th>{{#str}}submitted, videoevidence{{/str}}</th>
+                <th>{{#str}}watchedpercent, videoevidence{{/str}}</th>
+                <th>{{#str}}score, videoevidence{{/str}}</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>{{#rows}}
+                <tr>
+                    <td>{{fullname}}
+                        <div class="small text-muted">{{email}}</div>
+                    </td>
+                    <td>{{answered}} / {{questioncount}}</td>
+                    <td>{{evidencecount}}</td>
+                    <td>{{submitted}} / {{questioncount}}</td>
+                    <td>{{percent}}%</td>
+                    <td>{{score}}</td>
+                    <td><a class="btn btn-sm btn-primary" href="{{{gradeurl}}}">{{#str}}grade, videoevidence{{/str}}</a>
+                    </td>
+                </tr>{{/rows}}</tbody>
+        </table>
+    </div>{{/hasrows}}
