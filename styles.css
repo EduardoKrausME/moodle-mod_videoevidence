@@ -1,1 +1,15 @@
 .videoevidence-player video{max-height:70vh;background:#000}.videoevidence-embed{aspect-ratio:16/9;width:100%;background:#000}.videoevidence-timeline{height:12px;background:#dee2e6;border-radius:6px;position:relative;overflow:hidden}.videoevidence-timeline .watched{position:absolute;top:0;bottom:0;background:var(--bs-success,#198754)}.videoevidence-timeline .evidence-marker{position:absolute;top:0;bottom:0;background:var(--bs-warning,#ffc107);min-width:2px}.videoevidence-evidence button.btn-link{font-weight:600}.videoevidence-actions{white-space:nowrap}.videoevidence-embed iframe{width:100%;height:100%;border:0}
+/* Keep the evidence video fluid and avoid viewport-height shrinking. */
+.videoevidence-player video {
+    display: block;
+    width: 100%;
+    max-height: none;
+}
+
+.videoevidence-player .card-body > iframe {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border: 0;
+}
