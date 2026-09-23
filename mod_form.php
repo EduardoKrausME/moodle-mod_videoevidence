@@ -46,7 +46,7 @@ class mod_videoevidence_mod_form extends moodleform_mod {
         $mform->addRule('name', null, 'required', null, 'client');
         $this->standard_intro_elements();
 
-        $mform->addElement('header', 'videoheader', get_string('videoheader', 'videoevidence'));
+        $mform->addElement('html', '<h3>' . get_string('videoheader', 'videoevidence') . '</h3>');
         $mform->addElement('select', 'videosource', get_string('videosource', 'videoevidence'), [
             'upload' => get_string('sourceupload', 'videoevidence'),
             'url' => get_string('sourceurl', 'videoevidence'),
@@ -55,14 +55,14 @@ class mod_videoevidence_mod_form extends moodleform_mod {
         ]);
         $mform->setDefault('videosource', 'upload');
         $mform->addElement('filemanager', 'videofile', get_string('videofile', 'videoevidence'), null, [
-            'subdirs' => 0, 'maxfiles' => 1, 'accepted_types' => ['video'],
+            'subdirs' => 0, 'accepted_types' => ['video'],
         ]);
         $mform->hideIf('videofile', 'videosource', 'neq', 'upload');
         $mform->addElement('url', 'videourl', get_string('videourl', 'videoevidence'), ['size' => 80], ['usefilepicker' => false]);
         $mform->setType('videourl', PARAM_URL);
         $mform->hideIf('videourl', 'videosource', 'eq', 'upload');
         $mform->addElement('filemanager', 'poster', get_string('poster', 'videoevidence'), null, [
-            'subdirs' => 0, 'maxfiles' => 1, 'accepted_types' => ['image'],
+            'subdirs' => 0, 'accepted_types' => ['image'],
         ]);
         $mform->addElement('select', 'resumeplayback', get_string('resumeplayback', 'videoevidence'), [
             1 => get_string('resumeautomatic', 'videoevidence'),
@@ -101,6 +101,15 @@ class mod_videoevidence_mod_form extends moodleform_mod {
                 $errors['videourl'] = get_string('invalidyoutubeurl', 'videoevidence');
             } else if ($source === 'vimeo' && !source_manager::vimeo_config($url)) {
                 $errors['videourl'] = get_string('invalidvimeourl', 'videoevidence');
+            }
+        }
+        foreach (['videofile', 'poster'] as $field) {
+            $draftid = (int)($data[$field] ?? 0);
+            if ($draftid > 0) {
+                $draftinfo = file_get_draft_area_info($draftid);
+                if ((int)$draftinfo['filecount'] > 1) {
+                    $errors[$field] = get_string('errormaxfiles', 'videoevidence');
+                }
             }
         }
         return $errors;
