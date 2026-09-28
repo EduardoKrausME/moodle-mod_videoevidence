@@ -53,6 +53,20 @@ class backup_videoevidence_activity_task extends backup_activity_task {
      * @return mixed Return value.
      */
     public static function encode_content_links($content) {
+        global $CFG;
+
+        $base = preg_quote($CFG->wwwroot . '/mod/videoevidence', '#');
+
+        $pattern = '#(' . $base . '/index\\.php\\?id=)([0-9]+)#';
+        $content = preg_replace($pattern, '$@VIDEOEVIDENCEINDEX*$2@
+}
+, $content);
+
+        $pattern = '#(' . $base . '/view\\.php\\?id=)([0-9]+)#';
+        $content = preg_replace($pattern, '$@VIDEOEVIDENCEVIEWBYID*$2@
+}
+, $content);
+
         return $content;
     }
 }

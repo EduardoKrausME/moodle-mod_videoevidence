@@ -32,6 +32,7 @@
             <thead>
             <tr>
                 <th>{{#str}}student, videoevidence{{/str}}</th>
+                {{#identityheaders}}<th>{{label}}</th>{{/identityheaders}}
                 <th>{{#str}}questionsanswered, videoevidence{{/str}}</th>
                 <th>{{#str}}evidenceselected, videoevidence{{/str}}</th>
                 <th>{{#str}}submitted, videoevidence{{/str}}</th>
@@ -42,9 +43,8 @@
             </thead>
             <tbody>{{#rows}}
                 <tr>
-                    <td>{{fullname}}
-                        <div class="small text-muted">{{email}}</div>
-                    </td>
+                    <td>{{fullname}}</td>
+                    {{#identity}}<td>{{value}}</td>{{/identity}}
                     <td>{{answered}} / {{questioncount}}</td>
                     <td>{{evidencecount}}</td>
                     <td>{{submitted}} / {{questioncount}}</td>

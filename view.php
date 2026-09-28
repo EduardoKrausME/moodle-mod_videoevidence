@@ -38,6 +38,15 @@ $PAGE->set_title(format_string($activity->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+$event = \mod_videoevidence\event\course_module_viewed::create([
+    'objectid' => $activity->id,
+    'context' => $context,
+]);
+$event->add_record_snapshot('course_modules', $cm);
+$event->add_record_snapshot('course', $course);
+$event->add_record_snapshot('videoevidence', $activity);
+$event->trigger();
+
 $completion = new completion_info($course);
 if ($completion->is_enabled($cm)) {
     $completion->set_module_viewed($cm);

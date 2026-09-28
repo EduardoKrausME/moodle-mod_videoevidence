@@ -36,7 +36,34 @@ $PAGE->set_title(get_string('report', 'videoevidence'));
 $PAGE->set_heading(format_string($course->fullname));
 
 $questions = $DB->get_records('videoevidence_questions', ['videoevidenceid' => $activity->id], 'sortorder,id');
-$users = get_enrolled_users($context, 'mod/videoevidence:view', 0, 'u.id,u.firstname,u.lastname,u.email');
+
+$identityfields = \core_user\fields::get_identity_fields($context);
+$namefields = \core_user\fields::get_name_fields();
+$standardidentityfields = array_filter($identityfields, static function(string $field): bool {
+    return strpos($field, 'profile_field_') !== 0;
+});
+$userfields = array_unique(array_merge(['id'], $namefields, $standardidentityfields));
+$userselect = implode(',', array_map(static function(string $field): string {
+    return 'u.' . $field;
+}, $userfields));
+$users = get_enrolled_users($context, 'mod/videoevidence:view', 0, $userselect);
+
+$hascustomidentity = false;
+foreach ($identityfields as $field) {
+    if (strpos($field, 'profile_field_') === 0) {
+        $hascustomidentity = true;
+        break;
+    }
+}
+if ($hascustomidentity) {
+    require_once($CFG->dirroot . '/user/profile/lib.php');
+}
+
+$identityheaders = [];
+foreach ($identityfields as $field) {
+    $identityheaders[] = ['label' => \core_user\fields::get_display_name($field)];
+}
+
 $rows = [];
 foreach ($users as $user) {
     if (has_capability('mod/videoevidence:grade', $context, $user->id) ||
@@ -61,9 +88,22 @@ foreach ($users as $user) {
     }
     $progress = $DB->get_record('videoevidence_progress', ['videoevidenceid' => $activity->id, 'userid' => $user->id]);
     $score = \mod_videoevidence\grading_manager::activity_score($activity->id, $user->id);
+
+    $profile = $hascustomidentity ? profile_user_record($user->id, false) : null;
+    $identity = [];
+    foreach ($identityfields as $field) {
+        if (strpos($field, 'profile_field_') === 0) {
+            $shortname = substr($field, strlen('profile_field_'));
+            $value = $profile->{$shortname} ?? '';
+        } else {
+            $value = $user->{$field} ?? '';
+        }
+        $identity[] = ['value' => (string)$value];
+    }
+
     $rows[] = [
         'fullname' => fullname($user),
-        'email' => $user->email,
+        'identity' => $identity,
         'answered' => $answered,
         'questioncount' => count($questions),
         'submitted' => $submitted,
@@ -77,6 +117,7 @@ $data = [
     'name' => format_string($activity->name),
     'rows' => $rows,
     'hasrows' => (bool)$rows,
+    'identityheaders' => $identityheaders,
     'viewurl' => (new moodle_url('/mod/videoevidence/view.php', ['id' => $cm->id]))->out(false),
 ];
 echo $OUTPUT->header();

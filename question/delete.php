@@ -23,15 +23,52 @@
  */
 
 require('../../../config.php');
+
 $id = required_param('id', PARAM_INT);
 $qid = required_param('q', PARAM_INT);
-require_sesskey();
+$confirm = optional_param('confirm', 0, PARAM_BOOL);
+
 $cm = get_coursemodule_from_id('videoevidence', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
 $context = context_module::instance($cm->id);
+
 require_login($course, true, $cm);
 require_capability('mod/videoevidence:managequestions', $context);
-$question = $DB->get_record('videoevidence_questions', ['id' => $qid, 'videoevidenceid' => $cm->instance], '*', MUST_EXIST);
+
+$question = $DB->get_record(
+    'videoevidence_questions',
+    ['id' => $qid, 'videoevidenceid' => $cm->instance],
+    '*',
+    MUST_EXIST
+);
+
+$indexurl = new moodle_url('/mod/videoevidence/question/index.php', ['id' => $cm->id]);
+if (!$confirm) {
+    $PAGE->set_url('/mod/videoevidence/question/delete.php', ['id' => $cm->id, 'q' => $qid]);
+    $PAGE->set_title(get_string('deletequestionconfirm', 'videoevidence'));
+    $PAGE->set_heading(format_string($course->fullname));
+
+    $confirmurl = new moodle_url('/mod/videoevidence/question/delete.php', [
+        'id' => $cm->id,
+        'q' => $qid,
+        'confirm' => 1,
+        'sesskey' => sesskey(),
+    ]);
+
+    echo $OUTPUT->header();
+    echo $OUTPUT->confirm(get_string('deletequestionconfirm', 'videoevidence'), $confirmurl, $indexurl);
+    echo $OUTPUT->footer();
+    exit;
+}
+
+require_sesskey();
+
+$affecteduserids = $DB->get_fieldset_sql(
+    'SELECT DISTINCT userid
+       FROM {videoevidence_answers}
+      WHERE questionid = :questionid',
+    ['questionid' => $qid]
+);
 $answerids = $DB->get_fieldset_select('videoevidence_answers', 'id', 'questionid = :qid', ['qid' => $qid]);
 if ($answerids) {
     [$sql, $params] = $DB->get_in_or_equal($answerids, SQL_PARAMS_NAMED, 'a');
@@ -39,5 +76,9 @@ if ($answerids) {
 }
 $DB->delete_records('videoevidence_answers', ['questionid' => $qid]);
 $DB->delete_records('videoevidence_questions', ['id' => $qid]);
-redirect(new moodle_url('/mod/videoevidence/question/index.php',
-    ['id' => $cm->id]), get_string('questiondeleted', 'videoevidence'));
+
+foreach ($affecteduserids as $userid) {
+    \mod_videoevidence\grading_manager::sync($cm->instance, (int)$userid);
+}
+
+redirect($indexurl, get_string('questiondeleted', 'videoevidence'));

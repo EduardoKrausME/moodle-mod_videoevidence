@@ -52,7 +52,10 @@ class restore_videoevidence_activity_task extends restore_activity_task {
      * @return array Return value.
      */
     public static function define_decode_contents(): array {
-        return [];
+        return [
+            new restore_decode_content('videoevidence', ['intro'], 'videoevidence'),
+            new restore_decode_content('videoevidence_questions', ['questiontext'], 'videoevidence_question'),
+        ];
     }
 
     /**
@@ -61,6 +64,9 @@ class restore_videoevidence_activity_task extends restore_activity_task {
      * @return array Return value.
      */
     public static function define_decode_rules(): array {
-        return [];
+        return [
+            new restore_decode_rule('VIDEOEVIDENCEINDEX', '/mod/videoevidence/index.php?id=$1', 'course'),
+            new restore_decode_rule('VIDEOEVIDENCEVIEWBYID', '/mod/videoevidence/view.php?id=$1', 'course_module'),
+        ];
     }
 }

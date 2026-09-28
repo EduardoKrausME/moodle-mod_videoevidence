@@ -75,6 +75,7 @@ class backup_videoevidence_activity_structure_step extends backup_activity_struc
         $answer->annotate_ids('user', 'userid');
         $answer->annotate_ids('user', 'grader');
         $progress->annotate_ids('user', 'userid');
+        $activity->annotate_files('mod_videoevidence', 'intro', null);
         $activity->annotate_files('mod_videoevidence', 'video', null);
         $activity->annotate_files('mod_videoevidence', 'poster', null);
         return $this->prepare_activity_structure($activity);

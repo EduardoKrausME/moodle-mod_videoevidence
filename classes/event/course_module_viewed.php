@@ -15,17 +15,38 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * version.php
+ * Course module viewed event.
  *
  * @package   mod_videoevidence
  * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace mod_videoevidence\event;
+
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'mod_videoevidence';
-$plugin->version = 2026092800;
-$plugin->release = '1.0.2';
-$plugin->requires = 2024042200;
-$plugin->maturity = MATURITY_STABLE;
+/**
+ * Event triggered when a Video Evidence activity is viewed.
+ */
+class course_module_viewed extends \core\event\course_module_viewed {
+    /**
+     * Initialise the event.
+     *
+     * @return void
+     */
+    protected function init() {
+        $this->data['objecttable'] = 'videoevidence';
+        $this->data['crud'] = 'r';
+        $this->data['edulevel'] = self::LEVEL_PARTICIPATING;
+    }
+
+    /**
+     * Return the object ID mapping used during restore.
+     *
+     * @return array
+     */
+    public static function get_objectid_mapping() {
+        return ['db' => 'videoevidence', 'restore' => 'videoevidence'];
+    }
+}

@@ -48,19 +48,35 @@ class provider implements
         $collection->add_database_table('videoevidence_answers', [
             'userid' => 'privacy:metadata:answers:userid',
             'status' => 'privacy:metadata:answers:status',
-            'feedback' => 'privacy:metadata:answers:feedback',
+            'selectionscore' => 'privacy:metadata:answers:selectionscore',
+            'justificationscore' => 'privacy:metadata:answers:justificationscore',
+            'quantityscore' => 'privacy:metadata:answers:quantityscore',
             'finalscore' => 'privacy:metadata:answers:finalscore',
+            'feedback' => 'privacy:metadata:answers:feedback',
+            'timesubmitted' => 'privacy:metadata:answers:timesubmitted',
+            'timegraded' => 'privacy:metadata:answers:timegraded',
+            'grader' => 'privacy:metadata:answers:grader',
+            'timecreated' => 'privacy:metadata:answers:timecreated',
+            'timemodified' => 'privacy:metadata:answers:timemodified',
         ], 'privacy:metadata:answers');
         $collection->add_database_table('videoevidence_evidence', [
             'starttime' => 'privacy:metadata:evidence:starttime',
             'endtime' => 'privacy:metadata:evidence:endtime',
             'justification' => 'privacy:metadata:evidence:justification',
+            'timecreated' => 'privacy:metadata:evidence:timecreated',
+            'timemodified' => 'privacy:metadata:evidence:timemodified',
         ], 'privacy:metadata:evidence');
         $collection->add_database_table('videoevidence_progress', [
             'userid' => 'privacy:metadata:progress:userid',
-            'percent' => 'privacy:metadata:progress:percent',
+            'duration' => 'privacy:metadata:progress:duration',
             'lastposition' => 'privacy:metadata:progress:lastposition',
+            'uniquewatched' => 'privacy:metadata:progress:uniquewatched',
+            'totalwatchtime' => 'privacy:metadata:progress:totalwatchtime',
+            'percent' => 'privacy:metadata:progress:percent',
             'watchedsegments' => 'privacy:metadata:progress:watchedsegments',
+            'sequence' => 'privacy:metadata:progress:sequence',
+            'timecreated' => 'privacy:metadata:progress:timecreated',
+            'timemodified' => 'privacy:metadata:progress:timemodified',
         ], 'privacy:metadata:progress');
         return $collection;
     }
@@ -83,12 +99,17 @@ class provider implements
                                               AND p.userid = :puserid
          LEFT JOIN {videoevidence_questions} q ON q.videoevidenceid = v.id
          LEFT JOIN {videoevidence_answers}   a ON a.questionid = q.id
-                                              AND a.userid = :auserid
+                                              AND (a.userid = :auserid OR a.grader = :graderid)
              WHERE ctx.contextlevel = :contextlevel
                AND m.name = :modname
                AND (p.id IS NOT NULL OR a.id IS NOT NULL)";
-        $contextlist->add_from_sql($sql,
-            ['puserid' => $userid, 'auserid' => $userid, 'contextlevel' => CONTEXT_MODULE, 'modname' => 'videoevidence']);
+        $contextlist->add_from_sql($sql, [
+            'puserid' => $userid,
+            'auserid' => $userid,
+            'graderid' => $userid,
+            'contextlevel' => CONTEXT_MODULE,
+            'modname' => 'videoevidence',
+        ]);
         return $contextlist;
     }
 
@@ -100,14 +121,57 @@ class provider implements
      */
     public static function export_user_data(approved_contextlist $contextlist): void {
         global $DB;
+
+        $userid = $contextlist->get_user()->id;
         foreach ($contextlist->get_contexts() as $context) {
             $cm = get_coursemodule_from_id('videoevidence', $context->instanceid, 0, false, IGNORE_MISSING);
             if (!$cm) {
                 continue;
             }
-            $userid = $contextlist->get_user()->id;
-            $progress = $DB->get_record('videoevidence_progress', ['videoevidenceid' => $cm->instance, 'userid' => $userid]);
-            $data = (object)['progress' => $progress ?: null];
+
+            $progress = $DB->get_record('videoevidence_progress', [
+                'videoevidenceid' => $cm->instance,
+                'userid' => $userid,
+            ]);
+
+            $answers = [];
+            $grading = [];
+            $questions = $DB->get_records('videoevidence_questions', ['videoevidenceid' => $cm->instance], 'sortorder,id');
+            foreach ($questions as $question) {
+                $answer = $DB->get_record('videoevidence_answers', [
+                    'questionid' => $question->id,
+                    'userid' => $userid,
+                ]);
+                if ($answer) {
+                    $answerdata = clone $answer;
+                    $answerdata->evidence = array_values($DB->get_records(
+                        'videoevidence_evidence',
+                        ['answerid' => $answer->id],
+                        'sortorder,id'
+                    ));
+                    $answers[] = $answerdata;
+                }
+
+                $gradedanswers = $DB->get_records('videoevidence_answers', [
+                    'questionid' => $question->id,
+                    'grader' => $userid,
+                ]);
+                foreach ($gradedanswers as $gradedanswer) {
+                    if ((int)$gradedanswer->userid !== $userid) {
+                        $grading[] = $gradedanswer;
+                    }
+                }
+            }
+
+            if (!$progress && !$answers && !$grading) {
+                continue;
+            }
+
+            $data = (object)[
+                'progress' => $progress ?: null,
+                'answers' => $answers,
+                'grading' => $grading,
+            ];
             writer::with_context($context)->export_data([get_string('pluginname', 'videoevidence')], $data);
         }
     }
@@ -157,15 +221,31 @@ class provider implements
             $questionids = $DB->get_fieldset_select('videoevidence_questions', 'id',
                 'videoevidenceid = :id', ['id' => $cm->instance]);
             if ($questionids) {
-                [$sql, $params] = $DB->get_in_or_equal($questionids, SQL_PARAMS_NAMED, 'q');
-                $params['userid'] = $userid;
-                $answerids = $DB->get_fieldset_select('videoevidence_answers', 'id',
-                    "questionid {$sql} AND userid = :userid", $params);
+                [$qsql, $qparams] = $DB->get_in_or_equal($questionids, SQL_PARAMS_NAMED, 'q');
+
+                $answerparams = $qparams;
+                $answerparams['userid'] = $userid;
+                $answerids = $DB->get_fieldset_select(
+                    'videoevidence_answers',
+                    'id',
+                    "questionid {$qsql} AND userid = :userid",
+                    $answerparams
+                );
                 if ($answerids) {
                     [$asql, $aparams] = $DB->get_in_or_equal($answerids, SQL_PARAMS_NAMED, 'a');
                     $DB->delete_records_select('videoevidence_evidence', "answerid {$asql}", $aparams);
                     $DB->delete_records_select('videoevidence_answers', "id {$asql}", $aparams);
                 }
+
+                $graderparams = $qparams;
+                $graderparams['grader'] = $userid;
+                $DB->set_field_select(
+                    'videoevidence_answers',
+                    'grader',
+                    0,
+                    "questionid {$qsql} AND grader = :grader",
+                    $graderparams
+                );
             }
             $DB->delete_records('videoevidence_progress', ['videoevidenceid' => $cm->instance, 'userid' => $userid]);
         }
@@ -182,12 +262,29 @@ class provider implements
         if ($context->contextlevel !== CONTEXT_MODULE) {
             return;
         }
-        $sql = "
+        $progresssql = "
             SELECT p.userid
               FROM {course_modules}         cm
               JOIN {videoevidence_progress}  p ON p.videoevidenceid = cm.instance
              WHERE cm.id = :cmid";
-        $userlist->add_from_sql('userid', $sql, ['cmid' => $context->instanceid]);
+        $userlist->add_from_sql('userid', $progresssql, ['cmid' => $context->instanceid]);
+
+        $answersql = "
+            SELECT a.userid
+              FROM {course_modules}          cm
+              JOIN {videoevidence_questions} q ON q.videoevidenceid = cm.instance
+              JOIN {videoevidence_answers}   a ON a.questionid = q.id
+             WHERE cm.id = :cmid";
+        $userlist->add_from_sql('userid', $answersql, ['cmid' => $context->instanceid]);
+
+        $gradersql = "
+            SELECT a.grader AS userid
+              FROM {course_modules}          cm
+              JOIN {videoevidence_questions} q ON q.videoevidenceid = cm.instance
+              JOIN {videoevidence_answers}   a ON a.questionid = q.id
+             WHERE cm.id = :cmid
+               AND a.grader <> 0";
+        $userlist->add_from_sql('userid', $gradersql, ['cmid' => $context->instanceid]);
     }
 
     /**
@@ -214,14 +311,30 @@ class provider implements
         foreach ($userids as $userid) {
             if ($questionids) {
                 [$qsql, $qparams] = $DB->get_in_or_equal($questionids, SQL_PARAMS_NAMED, 'q');
-                $qparams['userid'] = $userid;
-                $answerids = $DB->get_fieldset_select('videoevidence_answers', 'id',
-                    "questionid {$qsql} AND userid = :userid", $qparams);
+
+                $answerparams = $qparams;
+                $answerparams['userid'] = $userid;
+                $answerids = $DB->get_fieldset_select(
+                    'videoevidence_answers',
+                    'id',
+                    "questionid {$qsql} AND userid = :userid",
+                    $answerparams
+                );
                 if ($answerids) {
                     [$asql, $aparams] = $DB->get_in_or_equal($answerids, SQL_PARAMS_NAMED, 'a');
                     $DB->delete_records_select('videoevidence_evidence', "answerid {$asql}", $aparams);
                     $DB->delete_records_select('videoevidence_answers', "id {$asql}", $aparams);
                 }
+
+                $graderparams = $qparams;
+                $graderparams['grader'] = $userid;
+                $DB->set_field_select(
+                    'videoevidence_answers',
+                    'grader',
+                    0,
+                    "questionid {$qsql} AND grader = :grader",
+                    $graderparams
+                );
             }
             $DB->delete_records('videoevidence_progress', ['videoevidenceid' => $cm->instance, 'userid' => $userid]);
         }

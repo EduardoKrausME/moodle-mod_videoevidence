@@ -133,6 +133,7 @@ class restore_videoevidence_activity_structure_step extends restore_activity_str
      * @return void Return value.
      */
     protected function after_execute(): void {
+        $this->add_related_files('mod_videoevidence', 'intro', null);
         $this->add_related_files('mod_videoevidence', 'video', null);
         $this->add_related_files('mod_videoevidence', 'poster', null);
     }
