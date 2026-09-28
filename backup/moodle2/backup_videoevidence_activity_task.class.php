@@ -59,6 +59,27 @@ class backup_videoevidence_activity_task extends backup_activity_task {
 
         $pattern = '#(' . $base . '/index\\.php\\?id=)([0-9]+)#';
         $content = preg_replace($pattern, '$@VIDEOEVIDENCEINDEX*$2@
+
+        $pattern = '#(' . $base . '/view\\.php\\?id=)([0-9]+)#';
+        $content = preg_replace($pattern, '$@VIDEOEVIDENCEVIEWBYID*$2@
+
+        return $content;
+    }
+}
+, $content);
+
+        $pattern = '#(' . $base . '/view\\.php\\?id=)([0-9]+)#';
+        $content = preg_replace($pattern, '$@VIDEOEVIDENCEVIEWBYID*$2@
+}
+, $content);
+
+        return $content;
+    }
+}
+, $content);
+
+        return $content;
+    }
 }
 , $content);
 
