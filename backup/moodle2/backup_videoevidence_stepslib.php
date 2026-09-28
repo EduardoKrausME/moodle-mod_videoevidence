@@ -35,7 +35,7 @@ class backup_videoevidence_activity_structure_step extends backup_activity_struc
         $userinfo = $this->get_setting_value('userinfo');
         $activity = new backup_nested_element('videoevidence', ['id'], [
             'name', 'intro', 'introformat', 'videosource', 'videourl', 'sourceconfig', 'resumeplayback', 'allowseek',
-            'completionevidence', 'grade', 'timecreated', 'timemodified'
+            'completionevidence', 'grade', 'timecreated', 'timemodified',
         ]);
         $questions = new backup_nested_element('questions');
         $question = new backup_nested_element('question', ['id'], [
@@ -47,7 +47,7 @@ class backup_videoevidence_activity_structure_step extends backup_activity_struc
         $answers = new backup_nested_element('answers');
         $answer = new backup_nested_element('answer', ['id'], [
             'userid', 'status', 'selectionscore', 'justificationscore', 'quantityscore', 'finalscore', 'feedback', 'timesubmitted',
-            'timegraded', 'grader', 'timecreated', 'timemodified'
+            'timegraded', 'grader', 'timecreated', 'timemodified',
         ]);
         $evidences = new backup_nested_element('evidences');
         $evidence = new backup_nested_element('evidence', ['id'],
