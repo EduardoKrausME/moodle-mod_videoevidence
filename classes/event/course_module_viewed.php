@@ -24,7 +24,6 @@
 
 namespace mod_videoevidence\event;
 
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Event triggered when a Video Evidence activity is viewed.
