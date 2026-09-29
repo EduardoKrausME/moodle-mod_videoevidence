@@ -54,7 +54,10 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
           ARCHIVE="mod_videoevidence_${VERSION}.zip"
           git archive --format=zip --prefix=videoevidence/ --output="${ARCHIVE}" HEAD
-          unzip -l "${ARCHIVE}" | grep -qv 'videoevidence/.git/'
+          if unzip -l "${ARCHIVE}" | grep -q 'videoevidence/.git/'; then
+            echo "Archive unexpectedly contains .git"
+            exit 1
+          fi
           echo "archive=${ARCHIVE}" >> "$GITHUB_ENV"
 
       - name: Create a Release on GitHub
