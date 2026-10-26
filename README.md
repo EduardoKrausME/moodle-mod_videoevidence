@@ -24,10 +24,6 @@ a video.
 
 Moodle 4.4 or later.
 
-## Installation
-
-Install the folder as `mod/videoevidence` and complete the Moodle upgrade process.
-
 ## License
 
 GNU GPL v3 or later.
